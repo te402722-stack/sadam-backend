@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require("express");
-const cors = require("cors");
 const db = require("./db");
 const admin = require("firebase-admin");
 
@@ -13,13 +12,32 @@ admin.initializeApp({
 });
 
 const app = express();
+app.use(express.json());
+const cors = require("cors");
+
+const allowedOrigins = [
+  process.env.FRONT_URL_ADULTO,
+  process.env.FRONT_URL_CUIDADOR,
+  "http://localhost:5173", // Para que puedas seguir probando en tu PC
+  "http://localhost:5174"
+];
 
 app.use(cors({
-  origin: [process.env.FRONT_URL_ADULTO, process.env.FRONT_URL_CUIDADOR],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type"]
+  origin: function (origin, callback) {
+    // Si no hay origen (como Postman) o está en la lista, permitir
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Bloqueado por SADAM-CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use(express.json());
+
+// Responder rápido a la pregunta "preflight" del navegador
+app.options("*", cors());
 
 
 /* =========================
