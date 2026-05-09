@@ -25,7 +25,19 @@ app.use(cors());
 // 2. JSON Parser
 app.use(express.json());
 
+/* =========================
+   NUEVA: VERIFICAR CORREO (Soluciona el 404 del Front)
+========================= */
+app.get("/verificar-correo", (req, res) => {
+    const { correo } = req.query;
+    if (!correo) return res.status(400).json({ mensaje: "Correo requerido" });
 
+    const sql = "SELECT id_usuario FROM usuarios WHERE correo = ? UNION SELECT id_cuidador FROM cuidadores WHERE correo = ?";
+    db.query(sql, [correo, correo], (err, result) => {
+        if (err) return res.status(500).json({ error: "Error en servidor" });
+        res.json({ existe: result.length > 0 });
+    });
+});
 /* =========================
    GUARDAR TOKEN
 ========================= */
