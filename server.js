@@ -24,10 +24,12 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Si no hay origen (como Postman) o está en la lista, permitir
+    // Si el origen está en la lista o es undefined (Postman)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      // 💡 Imprime esto en los logs de Render para saber qué URL está bloqueando
+      console.log("⚠️ Origen bloqueado por CORS:", origin);
       callback(new Error("Bloqueado por SADAM-CORS"));
     }
   },
