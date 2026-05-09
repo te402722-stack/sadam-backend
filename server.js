@@ -2,40 +2,28 @@ require('dotenv').config();
 const express = require("express");
 const db = require("./db");
 const admin = require("firebase-admin");
+const cors = require("cors"); // Movido arriba
 
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT
-);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+// Inicialización de Firebase
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
 
 const app = express();
+
+/* =========================
+   CONFIGURACIÓN DE MIDDLEWARES
+   (El orden aquí es CRUCIAL)
+========================= */
+
+// 1. CORS - Configuración abierta para evitar fallos en la presentación
+app.use(cors()); 
+
+// 2. JSON Parser
 app.use(express.json());
-const cors = require("cors");
-
-const allowedOrigins = [
-  process.env.FRONT_URL_ADULTO,
-  process.env.FRONT_URL_CUIDADOR,
-  "http://localhost:5173", // Para que puedas seguir probando en tu PC
-  "http://localhost:5174"
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("⚠️ Origen bloqueado por CORS:", origin);
-      callback(new Error("Bloqueado por SADAM-CORS"));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Asegúrate de que OPTIONS esté aquí
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
 
 
 /* =========================
@@ -60,35 +48,16 @@ app.post("/guardar-token", async (req, res) => {
    ENVIAR NOTIFICACIONES
 ========================= */
 async function enviarNotificacion(token, titulo, mensaje) {
-
-  if (!token) {
-    console.log("⚠️ Token vacío");
-    return;
-  }
-
-  const message = {
-    notification: {
-      title: titulo,
-      body: mensaje
-    },
-    token: token
-  };
-
-  try {
-    await admin.messaging().send(message);
-    console.log("🔔 Notificación enviada");
-  } catch (error) {
-    console.log("❌ Error enviando:", error.code);
-
-    if (error.code === "messaging/registration-token-not-registered") {
-      const sql = `
-        UPDATE adulto_mayor
-        SET token = NULL
-        WHERE token = ?
-      `;
-      db.query(sql, [token]);
+    if (!token) return;
+    const message = {
+        notification: { title: titulo, body: mensaje },
+        token: token
+    };
+    try {
+        await admin.messaging().send(message);
+    } catch (error) {
+        console.log("❌ Error enviando:", error.code);
     }
-  }
 }
 
 //////
