@@ -39,7 +39,7 @@ app.use(cors({
 }));
 
 // Responder rápido a la pregunta "preflight" del navegador
-app.options("*", cors());
+app.options("(.*)", cors());
 
 
 /* =========================
