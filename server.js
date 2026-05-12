@@ -867,23 +867,26 @@ app.post("/recordatorios", (req, res) => {
 
       switch (tipo) {
         case "medicamento":
+          // Aquí la columna se llama 'nombre' según tu historial anterior
           sqlDetalle = `INSERT INTO medicamentos (id_recordatorio, id_adulto, nombre, dosis, especificaciones) VALUES (?, ?, ?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, nombre, dosis, especificaciones];
+          paramsDetalle = [id_recordatorio, id_adulto, nombre, dosis, especificaciones];
           break;
 
         case "agua":
-          sqlDetalle = `INSERT INTO detalles_agua (id_recordatorio, id_adulto, vasos, especificaciones) VALUES (?,?, ?, ?)`;
+          sqlDetalle = `INSERT INTO detalles_agua (id_recordatorio, id_adulto, vasos, especificaciones) VALUES (?, ?, ?, ?)`;
           paramsDetalle = [id_recordatorio, id_adulto, vasos, especificaciones];
           break;
 
         case "cita":
-          sqlDetalle = `INSERT INTO detalles_citas (id_recordatorio,id_adulto, titulo, especialidad, lugar) VALUES (?, ?, ?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, id_adulto, titulo, especialidad, lugar];
+          // Aquí mapeamos: el 'nombre' que viene de React se guarda en la columna 'titulo' de tu BD
+          sqlDetalle = `INSERT INTO detalles_citas (id_recordatorio, id_adulto, titulo, especialidad, lugar) VALUES (?, ?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, id_adulto, nombre, especialidad, lugar];
           break;
 
         case "otro":
-          sqlDetalle = `INSERT INTO detalles_otros (id_recordatorio,id_adulto, titulo, especificaciones) VALUES (?, ?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, id_adulto,titulo, especificaciones];
+          // Lo mismo aquí: 'nombre' de React -> columna 'titulo' en BD
+          sqlDetalle = `INSERT INTO detalles_otros (id_recordatorio, id_adulto, titulo, especificaciones) VALUES (?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, id_adulto, nombre, especificaciones];
           break;
       }
 
