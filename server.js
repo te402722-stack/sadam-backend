@@ -782,10 +782,10 @@ app.get("/historial/:idAdulto", (req, res) => {
       r.hora
     FROM recordatorios r
     -- Unimos con todas las tablas de detalles usando el id_recordatorio
-    LEFT JOIN detalle_medicamento dm ON r.id_recordatorio = dm.id_recordatorio
-    LEFT JOIN detalle_agua da ON r.id_recordatorio = da.id_recordatorio
-    LEFT JOIN detalle_cita dc ON r.id_recordatorio = dc.id_recordatorio
-    LEFT JOIN detalle_otro dot ON r.id_recordatorio = dot.id_recordatorio
+    LEFT JOIN medicamentos dm ON r.id_recordatorio = dm.id_recordatorio
+    LEFT JOIN detalles_agua da ON r.id_recordatorio = da.id_recordatorio
+    LEFT JOIN detalles_citas dc ON r.id_recordatorio = dc.id_recordatorio
+    LEFT JOIN detalles_otros dot ON r.id_recordatorio = dot.id_recordatorio
     WHERE r.id_adulto = ?
     AND r.activo = 1
 
@@ -867,23 +867,23 @@ app.post("/recordatorios", (req, res) => {
 
       switch (tipo) {
         case "medicamento":
-          sqlDetalle = `INSERT INTO detalle_medicamento (id_recordatorio, nombre, dosis, especificaciones) VALUES (?, ?, ?, ?)`;
+          sqlDetalle = `INSERT INTO medicamentos (id_recordatorio, id_adulto, nombre, dosis, especificaciones) VALUES (?, ?, ?, ?, ?)`;
           paramsDetalle = [id_recordatorio, nombre, dosis, especificaciones];
           break;
 
         case "agua":
-          sqlDetalle = `INSERT INTO detalle_agua (id_recordatorio, vasos, especificaciones) VALUES (?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, vasos, especificaciones];
+          sqlDetalle = `INSERT INTO detalles_agua (id_recordatorio, id_adulto, vasos, especificaciones) VALUES (?,?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, id_adulto, vasos, especificaciones];
           break;
 
         case "cita":
-          sqlDetalle = `INSERT INTO detalle_cita (id_recordatorio, nombre, especialidad, lugar) VALUES (?, ?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, nombre, especialidad, lugar];
+          sqlDetalle = `INSERT INTO detalles_citas (id_recordatorio,id_adulto, titulo, especialidad, lugar) VALUES (?, ?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, id_adulto, titulo, especialidad, lugar];
           break;
 
         case "otro":
-          sqlDetalle = `INSERT INTO detalle_otro (id_recordatorio, nombre, especificaciones) VALUES (?, ?, ?)`;
-          paramsDetalle = [id_recordatorio, nombre, especificaciones];
+          sqlDetalle = `INSERT INTO detalles_otros (id_recordatorio,id_adulto, titulo, especificaciones) VALUES (?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, id_adulto,titulo, especificaciones];
           break;
       }
 
