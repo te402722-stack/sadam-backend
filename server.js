@@ -772,9 +772,9 @@ app.get("/historial/:idAdulto", (req, res) => {
         -- Si es agua: "Agua - 3 vasos"
         CONCAT('Agua: ', da.vasos, ' vasos'),
         -- Si es cita: "Cita: Dentista en Clinica San Jose"
-        CONCAT(dc.nombre, ' (', dc.especialidad, ') en ', dc.lugar),
+        CONCAT(dc.titulo, ' (', dc.especialidad, ') en ', dc.lugar),
         -- Si es otro: "Paseo - Sacar al perro"
-        CONCAT(dot.nombre, IF(dot.especificaciones != '', CONCAT(' - ', dot.especificaciones), '')),
+        CONCAT(dot.titulo, IF(dot.especificaciones != '', CONCAT(' - ', dot.especificaciones), '')),
         -- Si por alguna razón no hay detalle, muestra el tipo base
         r.tipo
       ) AS detalle,
@@ -806,13 +806,13 @@ app.get("/historial/:idAdulto", (req, res) => {
    CREAR RECORDATORIO
 ========================= */
 app.post("/recordatorios", (req, res) => {
-  // Recibimos todos los campos que envía tu componente React
+  // 1. Extraemos los datos EXACTOS que vienen del frontend
   const { 
     id_cuidador, 
     tipo, 
     fecha, 
     hora, 
-    nombre, 
+    nombre, // <-- React envía esto
     dosis, 
     especificaciones, 
     vasos, 
@@ -820,54 +820,35 @@ app.post("/recordatorios", (req, res) => {
     especialidad 
   } = req.body;
 
-  /* VALIDACIÓN BÁSICA */
   if (!id_cuidador || !tipo || !fecha || !hora) {
-    return res.status(400).json({
-      mensaje: "Faltan datos obligatorios (cuidador, tipo, fecha u hora)"
-    });
+    return res.status(400).json({ mensaje: "Faltan datos obligatorios" });
   }
 
-  /* 1️⃣ BUSCAR ADULTO DEL CUIDADOR */
-  const sqlAdulto = `
-    SELECT id_adulto 
-    FROM adulto_cuidador 
-    WHERE id_cuidador = ? 
-    LIMIT 1
-  `;
+  // 2. Buscamos el adulto
+  const sqlAdulto = `SELECT id_adulto FROM adulto_cuidador WHERE id_cuidador = ? LIMIT 1`;
 
   db.query(sqlAdulto, [id_cuidador], (err, result) => {
-    if (err) {
-      console.error("Error buscando adulto:", err);
-      return res.status(500).json({ mensaje: "Error al buscar adulto" });
-    }
-
-    if (result.length === 0) {
-      return res.status(404).json({ mensaje: "El cuidador no tiene un adulto vinculado" });
-    }
+    if (err) return res.status(500).json({ mensaje: "Error en servidor", error: err });
+    if (result.length === 0) return res.status(404).json({ mensaje: "Cuidador sin adulto vinculado" });
 
     const id_adulto = result[0].id_adulto;
 
-    /* 2️⃣ INSERTAR EN TABLA PRINCIPAL (recordatorios) */
-    const sqlInsertPrincipal = `
+    // 3. Insertamos en la tabla principal
+    const sqlPrincipal = `
       INSERT INTO recordatorios (id_adulto, tipo, fecha, hora, activo, completado)
       VALUES (?, ?, ?, ?, 1, 0)
     `;
 
-    db.query(sqlInsertPrincipal, [id_adulto, tipo, fecha, hora], (err2, resultPrincipal) => {
-      if (err2) {
-        console.error("Error creando recordatorio principal:", err2);
-        return res.status(500).json({ mensaje: "Error al crear recordatorio" });
-      }
+    db.query(sqlPrincipal, [id_adulto, tipo, fecha, hora], (err2, resultPrincipal) => {
+      if (err2) return res.status(500).json({ mensaje: "Error al crear recordatorio", error: err2 });
 
       const id_recordatorio = resultPrincipal.insertId;
-
-      /* 3️⃣ INSERTAR EN TABLA DE DETALLES SEGÚN EL TIPO */
       let sqlDetalle = "";
       let paramsDetalle = [];
 
+      // 4. Mapeo a tablas de detalles (Corrigiendo nombres de variables)
       switch (tipo) {
         case "medicamento":
-          // Aquí la columna se llama 'nombre' según tu historial anterior
           sqlDetalle = `INSERT INTO medicamentos (id_recordatorio, id_adulto, nombre, dosis, especificaciones) VALUES (?, ?, ?, ?, ?)`;
           paramsDetalle = [id_recordatorio, id_adulto, nombre, dosis, especificaciones];
           break;
@@ -878,51 +859,33 @@ app.post("/recordatorios", (req, res) => {
           break;
 
         case "cita":
-          // Aquí mapeamos: el 'nombre' que viene de React se guarda en la columna 'titulo' de tu BD
+          // Usamos 'nombre' de React para la columna 'titulo' de tu BD
           sqlDetalle = `INSERT INTO detalles_citas (id_recordatorio, id_adulto, titulo, especialidad, lugar) VALUES (?, ?, ?, ?, ?)`;
           paramsDetalle = [id_recordatorio, id_adulto, nombre, especialidad, lugar];
           break;
 
         case "otro":
-          // Lo mismo aquí: 'nombre' de React -> columna 'titulo' en BD
+          // Usamos 'nombre' de React para la columna 'titulo' de tu BD
           sqlDetalle = `INSERT INTO detalles_otros (id_recordatorio, id_adulto, titulo, especificaciones) VALUES (?, ?, ?, ?)`;
           paramsDetalle = [id_recordatorio, id_adulto, nombre, especificaciones];
           break;
       }
 
-      // Si el tipo coincide con alguna tabla de detalles, ejecutamos la segunda inserción
       if (sqlDetalle) {
         db.query(sqlDetalle, paramsDetalle, (err3) => {
           if (err3) {
-            console.error(`Error insertando detalle para ${tipo}:`, err3);
-            // Nota: El registro principal ya se creó, podrías decidir si borrarlo o continuar
-            return res.status(500).json({ mensaje: "Error al guardar los detalles específicos" });
+            console.error("Error detallado:", err3);
+            return res.status(500).json({ mensaje: "Error en tablas de detalles", error: err3 });
           }
-          
-          enviarRespuestaExitosa(res, id_recordatorio, id_adulto, tipo, fecha, hora);
+          res.json({ mensaje: "Guardado con éxito", id_recordatorio });
         });
       } else {
-        // Si por alguna razón el tipo no tiene tabla de detalles
-        enviarRespuestaExitosa(res, id_recordatorio, id_adulto, tipo, fecha, hora);
+        res.json({ mensaje: "Guardado con éxito (sin detalles)", id_recordatorio });
       }
     });
   });
 });
 
-// Función auxiliar para no repetir el código de respuesta
-function enviarRespuestaExitosa(res, id_rec, id_ad, tipo, fecha, hora) {
-  res.json({
-    mensaje: "Recordatorio y detalles guardados correctamente",
-    recordatorio: {
-      id_recordatorio: id_rec,
-      id_adulto: id_ad,
-      tipo: tipo,
-      fecha: fecha,
-      hora: hora,
-      completado: 0
-    }
-  });
-}
 /* =========================
    RECORDATORIOS POR ADULTO
 ========================= */
