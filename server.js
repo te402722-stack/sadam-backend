@@ -68,52 +68,28 @@ async function enviarNotificacion(token, titulo, mensaje) {
     try {
         await admin.messaging().send(message);
     } catch (error) {
-        console.log("❌ Error enviando:", error.code);
+        console.log("❌ Error enviando FCM:", error.code);
     }
 }
 
-//////
 app.get("/notificaciones/:id_adulto", (req, res) => {
-
   const { id_adulto } = req.params;
-
-  const sql = `
-    SELECT *
-    FROM notificaciones
-    WHERE id_adulto = ?
-    ORDER BY fecha DESC
-  `;
-
+  const sql = "SELECT * FROM notificaciones WHERE id_adulto = ? ORDER BY fecha DESC";
   db.query(sql, [id_adulto], (err, result) => {
-
-    if (err) return res.status(500).json(err);
-
+    if (err) return res.status(500).json({ mensaje: "Error al obtener notificaciones" });
     res.json(result);
-
   });
-
 });
 
-//MARCAR COMO LEIDA////
 app.post("/notificaciones/leida", (req, res) => {
-
   const { id_notificacion } = req.body;
-
-  const sql = `
-    UPDATE notificaciones
-    SET leida = 1
-    WHERE id_notificacion = ?
-  `;
-
+  const sql = "UPDATE notificaciones SET leida = 1 WHERE id_notificacion = ?";
   db.query(sql, [id_notificacion], (err) => {
-
-    if (err) return res.status(500).json(err);
-
+    if (err) return res.status(500).json({ mensaje: "Error al actualizar" });
     res.json({ ok: true });
-
   });
-
 });
+
 /* =========================
    GENERAR CÓDIGO
 ========================= */
@@ -128,6 +104,37 @@ function generarCodigo() {
   return codigo;
 }
 
+/* =========================
+   NUEVA: OBTENER CÓDIGO DE INVITACIÓN (Arregla el 404)
+========================= */
+app.get("/invitaciones/:id_adulto", (req, res) => {
+    const { id_adulto } = req.params;
+    const sql = "SELECT codigo_invitacion FROM adulto_mayor WHERE id_adulto = ?";
+    
+    db.query(sql, [id_adulto], (err, result) => {
+        if (err) return res.status(500).json({ error: "Error en servidor" });
+        
+        if (result.length > 0 && result[0].codigo_invitacion) {
+            res.json({ codigo: result[0].codigo_invitacion });
+        } else {
+            res.status(404).json({ mensaje: "Código no encontrado" });
+        }
+    });
+});
+
+/* =========================
+   NUEVA: GENERAR NUEVO CÓDIGO (Si el adulto no tiene)
+========================= */
+app.post("/invitaciones/generar", (req, res) => {
+    const { id_adulto } = req.body;
+    const nuevoCodigo = generarCodigo();
+    
+    const sql = "UPDATE adulto_mayor SET codigo_invitacion = ? WHERE id_adulto = ?";
+    db.query(sql, [nuevoCodigo, id_adulto], (err) => {
+        if (err) return res.status(500).json({ error: "Error al generar código" });
+        res.json({ codigo: nuevoCodigo });
+    });
+});
 /* =========================
    LOGIN ADULTO
 ========================= */
@@ -290,95 +297,64 @@ app.post("/login-cuidador", (req, res) => {
    OBTENER ADULTO
 ========================= */
 app.get("/adulto/:id", (req, res) => {
-
   const { id } = req.params;
 
   const query = `
-    SELECT id_adulto, nombre, fecha_nacimiento, peso, altura
+    SELECT id_adulto, nombre, fecha_nacimiento, peso, altura, 
+           tipo_sangre, direccion, contacto_emergencia, notas_medicas
     FROM adulto_mayor
     WHERE id_adulto = ?
   `;
 
   db.query(query, [id], (err, results) => {
-
     if (err) return res.status(500).json(err);
-
-    if (results.length === 0) {
-      return res.status(404).json({ mensaje: "No encontrado" });
-    }
+    if (results.length === 0) return res.status(404).json({ mensaje: "No encontrado" });
 
     const adulto = results[0];
-
-    // calcular edad
-    const nacimiento = new Date(adulto.fecha_nacimiento);
-    const hoy = new Date();
-    let edad = hoy.getFullYear() - nacimiento.getFullYear();
-
-    const m = hoy.getMonth() - nacimiento.getMonth();
-    if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
-      edad--;
+    
+    // Cálculo de edad seguro
+    let edad = 0;
+    if (adulto.fecha_nacimiento) {
+        const nacimiento = new Date(adulto.fecha_nacimiento);
+        const hoy = new Date();
+        edad = hoy.getFullYear() - nacimiento.getFullYear();
+        const m = hoy.getMonth() - nacimiento.getMonth();
+        if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) edad--;
     }
 
-    res.json({
-      ...adulto,
-      edad
-    });
-
+    res.json({ ...adulto, edad });
   });
-
 });
 
 /* =========================
    EDITAR ADULTO
 ========================= */
 app.put("/adulto/:id", (req, res) => {
-
   const { id } = req.params;
-
   const {
-    fecha_nacimiento,
-    peso,
-    altura,
-    tipo_sangre,
-    direccion,
-    contacto_emergencia,
-    notas_medicas
+    fecha_nacimiento, peso, altura, tipo_sangre, 
+    direccion, contacto_emergencia, notas_medicas
   } = req.body;
+
+  // Si la fecha llega vacía, la ponemos como null para que SQL no de error
+  const fechaFinal = fecha_nacimiento === "" ? null : fecha_nacimiento;
 
   const sql = `
     UPDATE adulto_mayor
-    SET
-      fecha_nacimiento = ?,
-      peso = ?,
-      altura = ?,
-      tipo_sangre = ?,
-      direccion = ?,
-      contacto_emergencia = ?,
-      notas_medicas = ?
+    SET fecha_nacimiento = ?, peso = ?, altura = ?, tipo_sangre = ?, 
+        direccion = ?, contacto_emergencia = ?, notas_medicas = ?
     WHERE id_adulto = ?
   `;
 
-  db.query(
-    sql,
-    [
-      fecha_nacimiento,
-      peso,
-      altura,
-      tipo_sangre,
-      direccion,
-      contacto_emergencia,
-      notas_medicas,
-      id
-    ],
+  db.query(sql, [fechaFinal, peso, altura, tipo_sangre, direccion, contacto_emergencia, notas_medicas, id], 
     (err) => {
-
-      if (err) return res.status(500).json(err);
-
-      res.json({ mensaje: "Adulto actualizado" });
-
+      if (err) {
+          console.error("Error al actualizar adulto:", err);
+          return res.status(500).json(err);
+      }
+      res.json({ mensaje: "Adulto actualizado correctamente" });
     }
   );
-
 });
 
 /* =========================
@@ -753,9 +729,7 @@ const hora = String(ahora.getHours()).padStart(2, "0") + ":" +
 /* =========================
    HISTORIAL COMPLETO ADULTO
 ========================= */
-
 app.get("/historial/:idAdulto", (req, res) => {
-
   const { idAdulto } = req.params;
 
   const sql = `
@@ -790,106 +764,162 @@ app.get("/historial/:idAdulto", (req, res) => {
     UNION ALL
 
     SELECT
-  'Recordatorio' AS tipo,
-  tipo AS detalle,
-  fecha,
-  hora
-FROM recordatorios
-WHERE id_adulto = ?
-AND activo = 1
+      'Recordatorio' AS tipo,
+      -- Combinamos los datos de las tablas de detalles según corresponda
+      COALESCE(
+        -- Si es medicamento: "Paracetamol - 500mg"
+        CONCAT(dm.nombre, IF(dm.dosis != '', CONCAT(' - ', dm.dosis), '')),
+        -- Si es agua: "Agua - 3 vasos"
+        CONCAT('Agua: ', da.vasos, ' vasos'),
+        -- Si es cita: "Cita: Dentista en Clinica San Jose"
+        CONCAT(dc.nombre, ' (', dc.especialidad, ') en ', dc.lugar),
+        -- Si es otro: "Paseo - Sacar al perro"
+        CONCAT(dot.nombre, IF(dot.especificaciones != '', CONCAT(' - ', dot.especificaciones), '')),
+        -- Si por alguna razón no hay detalle, muestra el tipo base
+        r.tipo
+      ) AS detalle,
+      r.fecha,
+      r.hora
+    FROM recordatorios r
+    -- Unimos con todas las tablas de detalles usando el id_recordatorio
+    LEFT JOIN detalle_medicamento dm ON r.id_recordatorio = dm.id_recordatorio
+    LEFT JOIN detalle_agua da ON r.id_recordatorio = da.id_recordatorio
+    LEFT JOIN detalle_cita dc ON r.id_recordatorio = dc.id_recordatorio
+    LEFT JOIN detalle_otro dot ON r.id_recordatorio = dot.id_recordatorio
+    WHERE r.id_adulto = ?
+    AND r.activo = 1
 
     ORDER BY fecha DESC, hora DESC
   `;
 
   db.query(sql, [idAdulto, idAdulto, idAdulto, idAdulto], (err, result) => {
-
     if (err) {
       console.error("Error historial:", err);
-      return res.status(500).json(err);
+      return res.status(500).json({ mensaje: "Error al obtener historial", error: err });
     }
 
     res.json(result);
-
   });
-
 });
 
 /* =========================
    CREAR RECORDATORIO
 ========================= */
 app.post("/recordatorios", (req, res) => {
+  // Recibimos todos los campos que envía tu componente React
+  const { 
+    id_cuidador, 
+    tipo, 
+    fecha, 
+    hora, 
+    nombre, 
+    dosis, 
+    especificaciones, 
+    vasos, 
+    lugar, 
+    especialidad 
+  } = req.body;
 
-  const { id_cuidador, tipo, fecha, hora } = req.body;
-
-  /* VALIDACIÓN */
+  /* VALIDACIÓN BÁSICA */
   if (!id_cuidador || !tipo || !fecha || !hora) {
     return res.status(400).json({
-      mensaje: "Faltan datos del recordatorio"
+      mensaje: "Faltan datos obligatorios (cuidador, tipo, fecha u hora)"
     });
   }
 
   /* 1️⃣ BUSCAR ADULTO DEL CUIDADOR */
-
   const sqlAdulto = `
-    SELECT id_adulto
-    FROM adulto_cuidador
-    WHERE id_cuidador = ?
+    SELECT id_adulto 
+    FROM adulto_cuidador 
+    WHERE id_cuidador = ? 
     LIMIT 1
   `;
 
   db.query(sqlAdulto, [id_cuidador], (err, result) => {
-
     if (err) {
       console.error("Error buscando adulto:", err);
-      return res.status(500).json({
-        mensaje: "Error al buscar adulto"
-      });
+      return res.status(500).json({ mensaje: "Error al buscar adulto" });
     }
 
     if (result.length === 0) {
-      return res.status(404).json({
-        mensaje: "El cuidador no tiene un adulto vinculado"
-      });
+      return res.status(404).json({ mensaje: "El cuidador no tiene un adulto vinculado" });
     }
 
     const id_adulto = result[0].id_adulto;
 
-    /* 2️⃣ INSERTAR RECORDATORIO */
-
-    const sqlInsert = `
-      INSERT INTO recordatorios
-      (id_adulto, tipo, fecha, hora, activo, completado)
+    /* 2️⃣ INSERTAR EN TABLA PRINCIPAL (recordatorios) */
+    const sqlInsertPrincipal = `
+      INSERT INTO recordatorios (id_adulto, tipo, fecha, hora, activo, completado)
       VALUES (?, ?, ?, ?, 1, 0)
     `;
 
-    db.query(sqlInsert, [id_adulto, tipo, fecha, hora], (err2, result2) => {
-
+    db.query(sqlInsertPrincipal, [id_adulto, tipo, fecha, hora], (err2, resultPrincipal) => {
       if (err2) {
-        console.error("Error creando recordatorio:", err2);
-        return res.status(500).json({
-          mensaje: "Error al crear recordatorio"
-        });
+        console.error("Error creando recordatorio principal:", err2);
+        return res.status(500).json({ mensaje: "Error al crear recordatorio" });
       }
 
-      /* RESPUESTA */
+      const id_recordatorio = resultPrincipal.insertId;
 
-      res.json({
-        mensaje: "Recordatorio creado correctamente",
-        recordatorio: {
-          id_recordatorio: result2.insertId,
-          id_adulto: id_adulto,
-          tipo: tipo,
-          fecha: fecha,
-          hora: hora,
-          completado: 0
-        }
-      });
+      /* 3️⃣ INSERTAR EN TABLA DE DETALLES SEGÚN EL TIPO */
+      let sqlDetalle = "";
+      let paramsDetalle = [];
 
+      switch (tipo) {
+        case "medicamento":
+          sqlDetalle = `INSERT INTO detalle_medicamento (id_recordatorio, nombre, dosis, especificaciones) VALUES (?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, nombre, dosis, especificaciones];
+          break;
+
+        case "agua":
+          sqlDetalle = `INSERT INTO detalle_agua (id_recordatorio, vasos, especificaciones) VALUES (?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, vasos, especificaciones];
+          break;
+
+        case "cita":
+          sqlDetalle = `INSERT INTO detalle_cita (id_recordatorio, nombre, especialidad, lugar) VALUES (?, ?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, nombre, especialidad, lugar];
+          break;
+
+        case "otro":
+          sqlDetalle = `INSERT INTO detalle_otro (id_recordatorio, nombre, especificaciones) VALUES (?, ?, ?)`;
+          paramsDetalle = [id_recordatorio, nombre, especificaciones];
+          break;
+      }
+
+      // Si el tipo coincide con alguna tabla de detalles, ejecutamos la segunda inserción
+      if (sqlDetalle) {
+        db.query(sqlDetalle, paramsDetalle, (err3) => {
+          if (err3) {
+            console.error(`Error insertando detalle para ${tipo}:`, err3);
+            // Nota: El registro principal ya se creó, podrías decidir si borrarlo o continuar
+            return res.status(500).json({ mensaje: "Error al guardar los detalles específicos" });
+          }
+          
+          enviarRespuestaExitosa(res, id_recordatorio, id_adulto, tipo, fecha, hora);
+        });
+      } else {
+        // Si por alguna razón el tipo no tiene tabla de detalles
+        enviarRespuestaExitosa(res, id_recordatorio, id_adulto, tipo, fecha, hora);
+      }
     });
-
   });
-
 });
+
+// Función auxiliar para no repetir el código de respuesta
+function enviarRespuestaExitosa(res, id_rec, id_ad, tipo, fecha, hora) {
+  res.json({
+    mensaje: "Recordatorio y detalles guardados correctamente",
+    recordatorio: {
+      id_recordatorio: id_rec,
+      id_adulto: id_ad,
+      tipo: tipo,
+      fecha: fecha,
+      hora: hora,
+      completado: 0
+    }
+  });
+}
 /* =========================
    RECORDATORIOS POR ADULTO
 ========================= */
