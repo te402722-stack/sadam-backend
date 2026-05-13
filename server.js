@@ -41,20 +41,32 @@ app.get("/verificar-correo", (req, res) => {
 /* =========================
    GUARDAR TOKEN
 ========================= */
-app.post("/guardar-token", async (req, res) => {
+app.post("/guardar-token", (req, res) => {
   const { id_adulto, token } = req.body;
 
-  try {
-    await db.query(
-      "UPDATE adulto_mayor SET token = ? WHERE id_adulto = ?",
-      [token, id_adulto]
-    );
+  console.log("📲 TOKEN RECIBIDO:", token);
+  console.log("👤 ADULTO:", id_adulto);
 
-    res.json({ ok: true });
+  const sql = `
+    UPDATE adulto_mayor
+    SET token = ?
+    WHERE id_adulto = ?
+  `;
 
-  } catch (error) {
-    res.status(500).json(error);
-  }
+  db.query(sql, [token, id_adulto], (err, result) => {
+
+    if (err) {
+      console.error("❌ Error guardando token:", err);
+      return res.status(500).json(err);
+    }
+
+    console.log("✅ Token guardado correctamente");
+
+    res.json({
+      ok: true
+    });
+
+  });
 });
 /* =========================
    ENVIAR NOTIFICACIONES
