@@ -312,11 +312,12 @@ app.get("/adulto/:id", (req, res) => {
   const { id } = req.params;
 
   const query = `
-    SELECT id_adulto, nombre, fecha_nacimiento, peso, altura, 
-           tipo_sangre, direccion, contacto_emergencia, notas_medicas
-    FROM adulto_mayor
-    WHERE id_adulto = ?
-  `;
+  SELECT id_adulto, nombre, fecha_nacimiento, peso, altura, 
+         tipo_sangre, direccion, contacto_emergencia, notas_medicas,
+         codigo_invitacion
+  FROM adulto_mayor
+  WHERE id_adulto = ?
+`;
 
   db.query(query, [id], (err, results) => {
     if (err) return res.status(500).json(err);
