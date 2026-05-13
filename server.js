@@ -515,6 +515,51 @@ app.post("/registro-cuidador", (req, res) => {
 
 });
 
+
+app.post("/vincular", (req, res) => {
+
+  const { codigo, id_cuidador } = req.body;
+
+  const sql = `
+    SELECT id_adulto, nombre
+    FROM adulto_mayor
+    WHERE codigo_invitacion = ?
+  `;
+
+  db.query(sql, [codigo], (err, result) => {
+
+    if (err) return res.status(500).json(err);
+
+    if (result.length === 0) {
+      return res.status(404).json({ mensaje: "Código inválido" });
+    }
+
+    const adulto = result[0];
+
+    const sqlInsert = `
+      INSERT INTO adulto_cuidador (id_adulto, id_cuidador, fecha_vinculacion)
+      VALUES (?, ?, NOW())
+    `;
+
+    db.query(sqlInsert, [adulto.id_adulto, id_cuidador], (err2) => {
+
+      if (err2) {
+        return res.status(500).json({
+          mensaje: "Error al vincular",
+          error: err2
+        });
+      }
+
+      res.json({
+        mensaje: "Vinculación exitosa",
+        adulto
+      });
+
+    });
+
+  });
+
+});
 /* =========================
    DASHBOARD COMPLETO
 ========================= */
